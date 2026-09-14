@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Análise de Monitoramento Semafórico</title>
+  <style>
+    :root { --ink:#172126; --muted:#647277; --line:#d9e1df; --paper:#f6f8f4; --card:#fff; --teal:#087f78; --orange:#dc7136; --red:#c7473d; --green:#2a9d65; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); font:15px/1.45 "Trebuchet MS", "Segoe UI", sans-serif; background:linear-gradient(135deg,#edf4f0 0%,#f8f6ef 58%,#f3e8dc 100%); }
+    main { max-width:1280px; margin:0 auto; padding:28px 20px 48px; }
+    header { display:flex; justify-content:space-between; gap:20px; align-items:end; margin-bottom:24px; }
+    h1,h2,p { margin:0; } h1 { font:700 clamp(28px,4vw,48px)/1 "Arial Narrow", "Trebuchet MS", sans-serif; letter-spacing:-1px; max-width:700px; }
+    .eyebrow { color:var(--teal); font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:10px; }
+    .subtitle { color:var(--muted); margin-top:10px; max-width:650px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:16px; background:rgba(255,255,255,.78); border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 28px rgba(31,59,54,.06); }
+    input[type=file], input[type=time], select, button { min-height:40px; border:1px solid #cbd7d3; border-radius:6px; background:#fff; color:var(--ink); padding:8px 12px; font:inherit; }
+    button { cursor:pointer; font-weight:700; } button.primary { background:var(--teal); border-color:var(--teal); color:#fff; } button:hover { filter:brightness(.96); }
+    .file-name { color:var(--muted); font-size:13px; min-width:180px; }
+    .notice { display:none; margin:14px 0; padding:12px 14px; border-left:4px solid var(--orange); background:#fff8ed; color:#74451f; }
+    .dashboard { display:none; }
+    .meta { color:var(--muted); font-size:13px; margin:18px 0; }
+    .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:17px; min-height:116px; }
+    .card .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.7px; }
+    .card strong { display:block; margin:8px 0 2px; font:700 30px/1 "Arial Narrow", sans-serif; }
+    .card small { color:var(--muted); }
+    .layout { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(300px,.8fr); gap:18px; align-items:start; }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:18px; margin-bottom:18px; }
+    .panel h2 { font-size:18px; margin-bottom:12px; }
+    .chart-wrap { overflow-x:auto; } canvas { display:block; width:100%; height:320px; background:linear-gradient(#fff,#fbfcf9); border:1px solid #e7eeea; border-radius:6px; }
+    .legend { display:flex; flex-wrap:wrap; gap:14px; color:var(--muted); font-size:12px; margin-top:10px; } .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; }
+    .insight { border-left:4px solid var(--teal); padding:11px 12px; background:#edf8f5; margin:8px 0; }
+    .insight.warn { border-color:var(--orange); background:#fff5e9; } .insight.alert { border-color:var(--red); background:#fff0ee; }
+    .filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; } .filters label { color:var(--muted); font-size:12px; display:flex; flex-direction:column; gap:4px; }
+    .table-box { max-height:420px; overflow:auto; border:1px solid var(--line); border-radius:6px; } table { width:100%; border-collapse:collapse; font-size:13px; } th,td { padding:9px 10px; text-align:right; border-bottom:1px solid #edf1ef; white-space:nowrap; } th:first-child,td:first-child { text-align:left; } th { position:sticky; top:0; background:#eef5f2; color:#38514e; font-size:12px; text-transform:uppercase; letter-spacing:.4px; } tr.peak { background:#fff4e7; }
+    .empty { color:var(--muted); text-align:center; padding:25px; }
+    .minute-charts { display:grid; gap:14px; margin-top:14px; }
+    .minute-chart-card { border:1px solid var(--line); border-radius:6px; padding:14px; background:#fbfdfb; }
+    .chart-card-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
+    .chart-card-head h3 { margin:0; font-size:15px; }
+    .remove-chart { min-height:32px; padding:5px 9px; font-size:12px; color:#8b3d35; border-color:#e3bdb7; }
+    .line-options { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:4px 0 12px; color:var(--muted); font-size:13px; }
+    .line-options label { display:flex; align-items:center; gap:4px; color:var(--ink); }
+    .chart-tooltip { position:fixed; display:none; z-index:5; pointer-events:none; padding:8px 10px; border:1px solid #cbd7d3; border-radius:6px; background:#172126; color:#fff; font-size:12px; box-shadow:0 5px 15px rgba(0,0,0,.18); }
+    footer { color:var(--muted); font-size:12px; margin-top:16px; }
+    @media (max-width:800px) { main { padding:20px 12px 35px; } header { display:block; } .cards { grid-template-columns:repeat(2,1fr); } .layout { display:block; } canvas { height:260px; } }
+    @media (max-width:480px) { .cards { grid-template-columns:1fr 1fr; gap:8px; } .card { padding:12px; min-height:105px; } .card strong { font-size:24px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><div class="eyebrow">Painel operacional</div><h1>O que aconteceu no trânsito?</h1><p class="subtitle">Carregue um relatório do monitor e veja os horários de maior pressão, evolução dos indicadores e registros para conferência.</p></div>
+  </header>
+  <section class="toolbar">
+    <input id="fileInput" type="file" accept=".txt,text/plain">
+    <span id="fileName" class="file-name">Nenhum arquivo carregado</span>
+    <button id="csvBtn" class="primary" type="button" disabled>Baixar CSV filtrado</button>
+  </section>
+  <div id="notice" class="notice"></div>
+  <section id="dashboard" class="dashboard">
+    <div id="meta" class="meta"></div>
+    <div class="cards">
+      <article class="card"><div class="label">Código do semáforo</div><strong id="signalCode">-</strong><small id="signalCodeDetail"></small></article>
+      <article class="card"><div class="label">Ciclo máximo (segundos)</div><strong id="ctMax">-</strong><small id="ctMaxAt">-</small></article>
+      <article class="card"><div class="label">Ciclo de referência (segundos)</div><strong id="rlMax">-</strong><small id="rlMaxAt">-</small></article>
+      <article class="card"><div class="label">Horário crítico</div><strong id="peakWindow">-</strong><small id="peakWindowDetail">-</small></article>
+      <article class="card"><div class="label">Registros lidos</div><strong id="recordCount">-</strong><small id="coverage">-</small></article>
+    </div>
+    <div class="layout">
+      <div>
+        <section class="panel"><h2>Movimento ao longo do período</h2><div class="chart-wrap"><canvas id="chart" width="900" height="320"></canvas></div><div class="legend"><span><i class="dot" style="background:#087f78"></i>CT</span><span><i class="dot" style="background:#dc7136"></i>RL</span><span><i class="dot" style="background:#c7473d"></i>SA</span></div></section>
+        <section class="panel"><h2>Grau de saturação (DS)</h2><p style="color:var(--muted);font-size:13px;margin-bottom:10px">Filtre o horário e o intervalo de média para consultar o DS. A média por hora facilita localizar períodos como 07:00.</p><div class="filters"><label>De<input id="dsFromTime" type="time" step="60"></label><label>Até<input id="dsToTime" type="time" step="60"></label><label>Intervalo<select id="dsBucket"><option value="1">Minuto a minuto</option><option value="5">Média a cada 5 min</option><option value="15">Média a cada 15 min</option><option value="60">Média por hora</option></select></label></div><div class="chart-wrap"><canvas id="dsChart" width="900" height="300"></canvas></div><div class="legend"><span><i class="dot" style="background:#7b4aa8"></i>DS médio</span></div></section>
+        <section class="panel"><h2>Saturação média por fase (ADS)</h2><p style="color:var(--muted);font-size:13px;margin-bottom:10px">Somente as linhas SA são consideradas. O gráfico apresenta a média ADS (%) de cada fase PH.</p><div class="filters"><label>De<input id="adsFromTime" type="time"></label><label>Até<input id="adsToTime" type="time"></label><label>Fase PH<select id="adsPhaseSelect"><option value="all">Todas as fases</option></select></label></div><div class="chart-wrap"><canvas id="adsChart" width="900" height="300"></canvas></div><div class="legend"><span><i class="dot" style="background:#087f78"></i>ADS médio (%) por fase PH</span></div></section>
+        <section class="panel"><h2>Veículos estimados x detectados</h2><p style="color:var(--muted);font-size:13px;margin-bottom:10px">VO representa o número estimado de veículos e VK o número detectado nas linhas SA. Repouse o ponteiro sobre os pontos para consultar os valores.</p><div class="filters"><label>De<input id="vehicleFromTime" type="time"></label><label>Até<input id="vehicleToTime" type="time"></label><label>Fase PH<select id="vehiclePhaseSelect"><option value="all">Todas as fases</option></select></label><label>Intervalo<select id="vehicleBucket"><option value="1">Minuto a minuto</option><option value="5">Média a cada 5 min</option><option value="15">Média a cada 15 min</option></select></label><button id="exportVehicleExcel" type="button" class="primary">Exportar Excel</button></div><div class="chart-wrap"><canvas id="vehicleChart" width="900" height="300"></canvas></div><div id="vehicleSummary" class="meta"></div><div class="legend"><span><i class="dot" style="background:#dc7136"></i>VO estimados</span><span><i class="dot" style="background:#087f78"></i>VK detectados</span></div></section>
+        <section class="panel"><h2>Evolução minuto a minuto</h2><p style="color:var(--muted);font-size:13px;margin-bottom:10px">Abra análises independentes para comparar indicadores e intervalos na mesma interação.</p><button id="addMinuteChart" class="primary" type="button">+ Adicionar gráfico</button><div id="minuteCharts" class="minute-charts"></div></section>
+        <section class="panel"><h2>Registros filtrados</h2><div class="filters"><label>De<input id="fromTime" type="time"></label><label>Até<input id="toTime" type="time"></label><label>Ordenar<select id="sortSelect"><option value="time">Horário</option><option value="ct">CT maior primeiro</option><option value="rl">RL maior primeiro</option><option value="ds">DS maior primeiro</option></select></label></div><div id="tableBox" class="table-box"></div></section>
+      </div>
+      <aside>
+        <section class="panel"><h2>Leitura rápida</h2><div id="insights"></div></section>
+        <section class="panel"><h2>Como usar no dia a dia</h2><p style="color:var(--muted)">Use a janela mais crítica para conferir a programação semafórica. Filtre um intervalo antes de uma reunião ou vistoria e baixe o CSV para compartilhar os números.</p><footer>Os códigos CT, RL, SA e DS são mantidos como aparecem no arquivo. A interpretação exata depende da legenda do sistema SCATS.</footer></section>
+      </aside>
+    </div>
+  </section>
+</main>
+<script>
+  const state = { records: [], filtered: [], fileName: '' };
+  const vehicleChartState = { data: [], exportRows: [], points: [], max: 1 };
+  const $ = id => document.getElementById(id);
+  $('fileInput').addEventListener('change', event => { const file = event.target.files[0]; if (file) { state.fileName = file.name; const reader = new FileReader(); reader.onload = e => loadText(e.target.result, file.name); reader.readAsText(file, 'UTF-8'); } });
+  $('csvBtn').addEventListener('click', downloadCsv);
+  $('exportVehicleExcel').addEventListener('click', exportVehicleExcel);
+  $('vehicleChart').addEventListener('mousemove', showVehicleTooltip);
+  $('vehicleChart').addEventListener('mouseleave', hideVehicleTooltip);
+  ['fromTime','toTime','sortSelect'].forEach(id => $(id).addEventListener('change', applyFilters));
+  ['dsFromTime','dsToTime','dsBucket'].forEach(id => $(id).addEventListener('change', applyDsFilters));
+  $('addMinuteChart').addEventListener('click', () => addMinuteChart());
+  ['adsFromTime','adsToTime','adsPhaseSelect'].forEach(id => $(id).addEventListener('change', applyAdsFilters));
+  ['vehicleFromTime','vehicleToTime','vehiclePhaseSelect','vehicleBucket'].forEach(id => $(id).addEventListener('change', applyVehicleFilters));
+  function parseText(text) {
+    const lines = text.replace(/\r/g, '').split('\n'), rows = [], ads = [], vehicles = [], codes = new Set(), linkPositions = new Map();
+    for (let i=0; i<lines.length; i++) {
+      const match = lines[i].match(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) .*? (\d{2}:\d{2}) .*?CT\s+(\d+)\s*([+-]\d+)\s+RL\s+(\d+)\s+SA\s+(\d+)/);
+      if (!match) continue;
+      const inlineDs = lines[i].match(/\bDS\s+(\d+)/);
+      const nextDs = (lines[i+1] || '').match(/^DS\s+(\d+)/);
+      for (let j=i+1; j<lines.length; j++) {
+        if (/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/.test(lines[j])) break;
+        const linkMatch=lines[j].match(/^\s*\d+\s+(SA)\s+(\d+)\b/);
+        if (!linkMatch) continue;
+        const values=lines[j].trim().split(/\s+/), phase=values[3], green=Number(values[4]?.replace('!','')), value=Number(values[values.length-1]);
+        const movementValues=values.slice(5,-1), vehicleGroups=[];
+        for(let index=0; index+2<movementValues.length; index+=3){const estimated=Number(movementValues[index+1]), detected=Number(movementValues[index+2]?.replace('!',''));if(Number.isFinite(estimated)&&Number.isFinite(detected)) vehicleGroups.push({estimated,detected});}
+        const originalLink=`${linkMatch[1]} ${linkMatch[2]}`;
+        if (!linkPositions.has(originalLink)) linkPositions.set(originalLink, linkPositions.size + 1);
+        if (Number.isFinite(value)) ads.push({ time:match[1], link:`Link ${linkPositions.get(originalLink)}`, originalLink, phase, green, value });
+        if (vehicleGroups.length) vehicles.push({time:match[1], phase, vo:vehicleGroups.reduce((sum,group)=>sum+group.estimated,0), vk:vehicleGroups.reduce((sum,group)=>sum+group.detected,0)});
+        codes.add(lines[j].trim().split(/\s+/)[0]);
+      }
+      rows.push({ time:match[1], ct:Number(match[2]), variation:Number(match[3]), rl:Number(match[4]), sa:Number(match[5]), ds:inlineDs ? Number(inlineDs[1]) : nextDs ? Number(nextDs[1]) : null });
+    }
+    rows.codes = [...codes];
+    rows.ads = ads;
+    rows.vehicles = vehicles;
+    rows.linkPositions = linkPositions;
+    return rows;
+  }
+  function loadText(text, name) {
+    const records = parseText(text);
+    if (!records.length) { showNotice('Não encontrei registros no formato esperado. O relatório precisa conter linhas de horário com CT, RL e SA.'); return; }
+    state.records = records; state.fileName = name; $('fileName').textContent = name; $('dashboard').style.display = 'block'; $('csvBtn').disabled = false; $('notice').style.display = 'none'; $('signalCode').textContent = records.codes?.length ? records.codes.join(' / ') : 'Não identificado'; $('signalCodeDetail').textContent = ''; populateAdsPhases(records.ads || []); populateVehiclePhases(records.vehicles || []); render();
+  }
+  function showNotice(message) { $('notice').textContent = message; $('notice').style.display = 'block'; }
+  function avg(rows, key) { const values=rows.map(r=>r[key]).filter(v=>Number.isFinite(v)); return values.length ? values.reduce((a,b)=>a+b,0)/values.length : 0; }
+  function maxBy(rows, key) { return rows.reduce((best,row) => !best || (row[key] ?? -Infinity) > (best[key] ?? -Infinity) ? row : best, null); }
+  function render() {
+    const rows=state.records, ct=maxBy(rows,'ct'), rl=maxBy(rows,'rl');
+    $('meta').textContent = `${state.fileName} | ${rows[0].time} até ${rows[rows.length-1].time} | média CT ${avg(rows,'ct').toFixed(1)} | média RL ${avg(rows,'rl').toFixed(1)}`;
+    $('ctMax').textContent=ct.ct; $('ctMaxAt').textContent=`às ${ct.time}`; $('rlMax').textContent=rl.rl; $('rlMaxAt').textContent=`às ${rl.time}`; $('recordCount').textContent=rows.length; $('coverage').textContent=`média SA ${avg(rows,'sa').toFixed(1)}`;
+    const windowSize = Math.min(30, rows.length), peakStart = rows.length ? rows.reduce((best, _, i) => { const slice=rows.slice(i, i+windowSize); return avg(slice,'ct') > avg(rows.slice(best, best+windowSize),'ct') ? i : best; }, 0) : 0, peak = rows.slice(peakStart, peakStart+windowSize); $('peakWindow').textContent=peak.length ? `${peak[0].time}–${peak[peak.length-1].time}` : 'Sem pico'; $('peakWindowDetail').textContent=peak.length ? `média CT ${avg(peak,'ct').toFixed(1)} em ${peak.length} leituras` : 'Sem dados';
+    drawChart(rows); applyDsFilters(); applyAdsFilters(); applyVehicleFilters(); refreshMinuteCharts(); buildInsights(rows, ct, rl); applyFilters();
+  }
+  function buildInsights(rows, ct, rl) {
+    const morning=rows.filter(r=>r.time >= '06:00' && r.time <= '10:00'), base=rows.filter(r=>r.time < '06:00'); const rise=avg(morning,'ct')-avg(base,'ct');
+    const alerts=[]; alerts.push(`<div class="insight ${rise>15?'warn':''}"><b>Horário de atenção:</b> CT médio entre 6h e 10h ficou ${rise>=0?rise.toFixed(1)+' pontos acima':'abaixo'} da madrugada.</div>`);
+    alerts.push(`<div class="insight ${ct.ct >= 100?'alert':''}"><b>Pico:</b> CT ${ct.ct} às ${ct.time}; RL máximo foi ${rl.rl} às ${rl.time}.</div>`);
+    const zeros=rows.filter(r=>r.sa===0).length; alerts.push(`<div class="insight"><b>Leituras sem SA:</b> ${zeros} de ${rows.length} registros (${(zeros/rows.length*100).toFixed(0)}%). Confira se é ausência de movimento ou código operacional.</div>`);
+    $('insights').innerHTML=alerts.join('');
+  }
+  function applyFilters() {
+    if (!state.records.length) return; const from=$('fromTime').value || '00:00', to=$('toTime').value || '23:59'; let rows=state.records.filter(r=>r.time>=from && r.time<=to); const sort=$('sortSelect').value; rows.sort((a,b)=>sort==='time'?a.time.localeCompare(b.time):sort==='ct'?b.ct-a.ct:sort==='rl'?b.rl-a.rl:(b.ds??-1)-(a.ds??-1)); state.filtered=rows; $('tableBox').innerHTML=rows.length ? `<table><thead><tr><th>Hora</th><th>CT</th><th>Variação</th><th>RL</th><th>SA</th><th>DS</th></tr></thead><tbody>${rows.map(r=>`<tr class="${r.ct>=100?'peak':''}"><td>${r.time}</td><td>${r.ct}</td><td>${r.variation>0?'+':''}${r.variation}</td><td>${r.rl}</td><td>${r.sa}</td><td>${r.ds ?? '-'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Nenhum registro nesse intervalo.</div>';
+  }
+  function minuteData(rows, metric, bucket) {
+    const values=rows.filter(row=>Number.isFinite(row[metric]));
+    if (bucket === 1) return values.map(row=>({label:row.time,value:row[metric]}));
+    const groups=new Map(); values.forEach(row=>{const minute=Number(row.time.slice(3)); const hour=row.time.slice(0,2); const key=`${hour}:${String(Math.floor(minute/bucket)*bucket).padStart(2,'0')}`; if(!groups.has(key)) groups.set(key,[]); groups.get(key).push(row[metric]);});
+    return [...groups].map(([label,group])=>({label,value:group.reduce((sum,item)=>sum+item,0)/group.length}));
+  }
+  function addMinuteChart() {
+    const id=`minute-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+    const card=document.createElement('article'); card.className='minute-chart-card'; card.dataset.chartId=id;
+    card.innerHTML=`<div class="chart-card-head"><h3>Análise minuto a minuto</h3><button type="button" class="remove-chart" title="Remover gráfico">Remover</button></div><div class="filters"><label>De<input class="minute-from" type="time"></label><label>Até<input class="minute-to" type="time"></label><label>Intervalo<select class="minute-bucket"><option value="1">Minuto a minuto</option><option value="5">Média a cada 5 min</option><option value="15">Média a cada 15 min</option></select></label></div><div class="line-options"><span>Linhas:</span><label><input class="minute-metric" type="checkbox" value="ct" checked> CT</label><label><input class="minute-metric" type="checkbox" value="rl"> RL</label><label><input class="minute-metric" type="checkbox" value="sa"> SA</label><label><input class="minute-metric" type="checkbox" value="ds"> DS</label></div><div class="chart-wrap"><canvas class="minute-canvas" width="900" height="320"></canvas></div><div class="minute-summary meta"></div>`;
+    $('minuteCharts').appendChild(card);
+    card.querySelectorAll('input,select').forEach(control=>control.addEventListener('change',()=>refreshMinuteChart(card)));
+    card.querySelector('.remove-chart').addEventListener('click',()=>{card.remove();});
+    refreshMinuteChart(card);
+  }
+  function refreshMinuteCharts() { document.querySelectorAll('.minute-chart-card').forEach(card=>refreshMinuteChart(card)); }
+  function refreshMinuteChart(card) {
+    if (!state.records.length) return;
+    const from=card.querySelector('.minute-from').value || '00:00', to=card.querySelector('.minute-to').value || '23:59', metrics=[...card.querySelectorAll('.minute-metric:checked')].map(input=>input.value), bucket=Number(card.querySelector('.minute-bucket').value);
+    const rows=state.records.filter(row=>row.time>=from && row.time<=to), series=metrics.map(metric=>({metric,data:minuteData(rows,metric,bucket)}));
+    drawMinuteChart(card.querySelector('.minute-canvas'),series); const pointCount=series[0]?.data.length || 0; card.querySelector('.minute-summary').textContent=pointCount ? `${pointCount} pontos | ${metrics.join(', ').toUpperCase()} | selecione as linhas para comparar` : 'Nenhum registro no intervalo selecionado.';
+  }
+  function drawMinuteChart(canvas,series) {
+    const ctx=canvas.getContext('2d'), dpr=window.devicePixelRatio||1, width=canvas.clientWidth, height=320; canvas.width=width*dpr; canvas.height=height*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,width,height);
+    const data=series[0]?.data || [];
+    if(!data.length){ctx.fillStyle='#73817e';ctx.font='14px sans-serif';ctx.fillText('Não há registros para desenhar.',24,42);return;}
+    const allValues=series.flatMap(item=>item.data.map(point=>point.value)), pad={l:48,r:16,t:18,b:34}, max=Math.max(...allValues,1), min=Math.min(...allValues,0), range=Math.max(max-min,1), x=i=>pad.l+(width-pad.l-pad.r)*(i/Math.max(data.length-1,1)), y=value=>height-pad.b-(height-pad.t-pad.b)*((value-min)/range);
+    ctx.strokeStyle='#e3ebe7';ctx.lineWidth=1;for(let n=0;n<=4;n++){const value=min+range*n/4,yy=y(value);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(width-pad.r,yy);ctx.stroke();ctx.fillStyle='#73817e';ctx.font='11px sans-serif';ctx.fillText(value.toFixed(0),8,yy+4);}
+    const colors={ct:'#087f78',rl:'#dc7136',sa:'#c7473d',ds:'#7b4aa8'}; series.forEach(item=>{ctx.strokeStyle=colors[item.metric];ctx.lineWidth=2;ctx.beginPath();item.data.forEach((point,index)=>index?ctx.lineTo(x(index),y(point.value)):ctx.moveTo(x(index),y(point.value)));ctx.stroke();ctx.fillStyle=colors[item.metric];item.data.forEach((point,index)=>{if(item.data.length<80 || index%Math.ceil(item.data.length/40)===0){ctx.beginPath();ctx.arc(x(index),y(point.value),3,0,Math.PI*2);ctx.fill();}});});
+    ctx.font='11px sans-serif';let legendX=pad.l;series.forEach(item=>{ctx.fillStyle=colors[item.metric];ctx.fillRect(legendX,6,10,10);ctx.fillStyle='#53625f';ctx.fillText(item.metric.toUpperCase(),legendX+15,15);legendX+=46;});ctx.fillStyle='#73817e';const step=Math.max(1,Math.ceil(data.length/6));data.forEach((item,index)=>{if(index%step===0)ctx.fillText(item.label,x(index)-14,height-10);});
+  }
+  function drawChart(rows) {
+    const canvas=$('chart'), ctx=canvas.getContext('2d'), dpr=window.devicePixelRatio||1, width=canvas.clientWidth, height=320; canvas.width=width*dpr; canvas.height=height*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,width,height); const pad={l:42,r:16,t:18,b:34}, max=Math.max(...rows.map(r=>Math.max(r.ct,r.rl,r.sa)),100), x=i=>pad.l+(width-pad.l-pad.r)*(i/Math.max(rows.length-1,1)), y=v=>height-pad.b-(height-pad.t-pad.b)*(v/max); ctx.strokeStyle='#e3ebe7'; ctx.lineWidth=1; for(let n=0;n<=4;n++){const yy=y(max*n/4);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(width-pad.r,yy);ctx.stroke();ctx.fillStyle='#73817e';ctx.font='11px sans-serif';ctx.fillText(Math.round(max*n/4),8,yy+4);} [['ct','#087f78'],['rl','#dc7136'],['sa','#c7473d']].forEach(([key,color])=>{ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();rows.forEach((r,i)=>i?ctx.lineTo(x(i),y(r[key])):ctx.moveTo(x(i),y(r[key])));ctx.stroke();}); ctx.fillStyle='#73817e'; ctx.font='11px sans-serif'; const step=Math.max(1,Math.floor(rows.length/6)); rows.forEach((r,i)=>{if(i%step===0){ctx.fillText(r.time,x(i)-14,height-10);}});
+  }
+  function dsByHour(rows) {
+    const groups = new Map(); rows.filter(r=>Number.isFinite(r.ds)).forEach(r=>{ const hour=r.time.slice(0,2)+':00'; if(!groups.has(hour)) groups.set(hour,[]); groups.get(hour).push(r.ds); });
+    return [...groups].map(([label,values])=>({label, value:values.reduce((a,b)=>a+b,0)/values.length, count:values.length}));
+  }
+  function applyDsFilters() {
+    if (!state.records.length) return;
+    const from=$('dsFromTime').value||'00:00', to=$('dsToTime').value||'23:59', bucket=Number($('dsBucket').value), rows=state.records.filter(row=>row.time>=from&&row.time<=to), data=dsByInterval(rows,bucket);
+    drawDsChart(data);
+  }
+  function dsByInterval(rows,bucket) {
+    const values=rows.filter(row=>Number.isFinite(row.ds));
+    if(bucket===1)return values.map(row=>({label:row.time,value:row.ds}));
+    const groups=new Map(); values.forEach(row=>{const minute=Number(row.time.slice(3)),hour=row.time.slice(0,2),key=`${hour}:${String(Math.floor(minute/bucket)*bucket).padStart(2,'0')}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row.ds);});
+    return [...groups].map(([label,items])=>({label,value:items.reduce((sum,item)=>sum+item,0)/items.length}));
+  }
+  function drawDsChart(data) {
+    const canvas=$('dsChart'), ctx=canvas.getContext('2d'), dpr=window.devicePixelRatio||1, width=canvas.clientWidth, height=300; canvas.width=width*dpr; canvas.height=height*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,width,height); if(!data.length){ctx.fillStyle='#73817e';ctx.font='14px sans-serif';ctx.fillText('Não há valores DS para desenhar.',24,42);return;} const pad={l:44,r:18,t:18,b:40}, max=Math.max(...data.map(d=>d.value),100), slot=(width-pad.l-pad.r)/data.length, barWidth=Math.max(8,slot*.62), y=v=>height-pad.b-(height-pad.t-pad.b)*(v/max); ctx.strokeStyle='#e3ebe7';ctx.lineWidth=1;for(let n=0;n<=4;n++){const yy=y(max*n/4);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(width-pad.r,yy);ctx.stroke();ctx.fillStyle='#73817e';ctx.font='11px sans-serif';ctx.fillText(Math.round(max*n/4),8,yy+4);} data.forEach((d,i)=>{const barH=height-pad.b-y(d.value), xx=pad.l+i*slot+(slot-barWidth)/2;ctx.fillStyle='#7b4aa8';ctx.fillRect(xx,y(d.value),barWidth,barH);ctx.fillStyle='#4d3a63';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText(d.value.toFixed(1),xx+barWidth/2,y(d.value)-5);ctx.fillStyle='#73817e';ctx.fillText(d.label,xx+barWidth/2,height-13);});ctx.textAlign='left';
+  }
+  function adsByLink(ads) {
+    const groups = new Map(); ads.forEach(item=>{ if(!groups.has(item.phase)) groups.set(item.phase,[]); groups.get(item.phase).push(item); });
+    return [...groups].map(([phase,items])=>({label:`Fase ${phase}`, phase, value:items.reduce((sum,item)=>sum+item.value,0)/items.length, count:items.length})).sort((a,b)=>a.phase.localeCompare(b.phase));
+  }
+  function populateAdsPhases(ads) {
+    const select=$('adsPhaseSelect'), phases=[...new Set(ads.map(item=>item.phase))].sort(); select.innerHTML='<option value="all">Todas as fases</option>'+phases.map(phase=>`<option value="${phase}">Fase ${phase}</option>`).join('');
+  }
+  function applyAdsFilters() {
+    if (!state.records.length) return;
+    const from=$('adsFromTime').value || '00:00', to=$('adsToTime').value || '23:59', phase=$('adsPhaseSelect').value;
+    const ads=(state.records.ads || []).filter(item=>item.time>=from && item.time<=to && (phase==='all' || item.phase===phase));
+    drawAdsChart(ads);
+  }
+  function populateVehiclePhases(vehicles) {
+    const select=$('vehiclePhaseSelect'), phases=[...new Set(vehicles.map(item=>item.phase))].sort(); select.innerHTML='<option value="all">Todas as fases</option>'+phases.map(phase=>`<option value="${phase}">Fase ${phase}</option>`).join('');
+  }
+  function vehicleByInterval(vehicles,bucket) {
+    if(bucket===1)return vehicles.map(item=>({label:item.time,vo:item.vo,vk:item.vk}));
+    const groups=new Map(); vehicles.forEach(item=>{const minute=Number(item.time.slice(3)),hour=item.time.slice(0,2),key=`${hour}:${String(Math.floor(minute/bucket)*bucket).padStart(2,'0')}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);});
+    return [...groups].map(([label,items])=>({label,vo:items.reduce((sum,item)=>sum+item.vo,0)/items.length,vk:items.reduce((sum,item)=>sum+item.vk,0)/items.length}));
+  }
+  function vehicleExportByPhase(vehicles,bucket) {
+    if(bucket===1)return vehicles.map(item=>({label:item.time,phase:item.phase,vk:Math.round(item.vk)}));
+    const groups=new Map(); vehicles.forEach(item=>{const minute=Number(item.time.slice(3)),hour=item.time.slice(0,2),label=`${hour}:${String(Math.floor(minute/bucket)*bucket).padStart(2,'0')}`,key=`${label}|${item.phase}`;if(!groups.has(key))groups.set(key,{label,phase:item.phase,values:[]});groups.get(key).values.push(item.vk);});
+    return [...groups.values()].map(group=>({label:group.label,phase:group.phase,vk:Math.round(group.values.reduce((sum,value)=>sum+value,0)/group.values.length)})).sort((a,b)=>a.label.localeCompare(b.label)||a.phase.localeCompare(b.phase));
+  }
+  function applyVehicleFilters() {
+    if(!state.records.length)return;
+    const from=$('vehicleFromTime').value||'00:00',to=$('vehicleToTime').value||'23:59',phase=$('vehiclePhaseSelect').value,bucket=Number($('vehicleBucket').value),vehicles=(state.records.vehicles||[]).filter(item=>item.time>=from&&item.time<=to&&(phase==='all'||item.phase===phase)),data=vehicleByInterval(vehicles,bucket);
+      vehicleChartState.data=data; vehicleChartState.exportRows=vehicleExportByPhase(vehicles,bucket); drawVehicleChart(data);const vo=vehicles.reduce((sum,item)=>sum+item.vo,0),vk=vehicles.reduce((sum,item)=>sum+item.vk,0);$('vehicleSummary').textContent=vehicles.length?`${vehicles.length} leituras SA | VO total ${Math.round(vo)} | VK total ${Math.round(vk)} | diferença ${Math.round(vo-vk)}`:'Nenhum registro no intervalo selecionado.';
+  }
+  function drawVehicleChart(data) {
+    const canvas=$('vehicleChart'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1,width=canvas.clientWidth,height=300;canvas.width=width*dpr;canvas.height=height*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,width,height);
+    if(!data.length){ctx.fillStyle='#73817e';ctx.font='14px sans-serif';ctx.fillText('Não há dados VO/VK para desenhar.',24,42);return;}
+    const pad={l:48,r:16,t:18,b:34},max=Math.max(...data.flatMap(item=>[item.vo,item.vk]),1),x=i=>pad.l+(width-pad.l-pad.r)*(i/Math.max(data.length-1,1)),y=value=>height-pad.b-(height-pad.t-pad.b)*(value/max); vehicleChartState.max=max; vehicleChartState.points=data.map((item,index)=>({item,index,x:x(index),voY:y(item.vo),vkY:y(item.vk)}));ctx.strokeStyle='#e3ebe7';ctx.lineWidth=1;for(let n=0;n<=4;n++){const yy=y(max*n/4);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(width-pad.r,yy);ctx.stroke();ctx.fillStyle='#73817e';ctx.font='11px sans-serif';ctx.fillText(Math.round(max*n/4),8,yy+4);} [['vo','#dc7136'],['vk','#087f78']].forEach(([key,color])=>{ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();data.forEach((item,index)=>index?ctx.lineTo(x(index),y(item[key])):ctx.moveTo(x(index),y(item[key])));ctx.stroke();ctx.fillStyle=color;data.forEach((item,index)=>{if(data.length<80||index%Math.ceil(data.length/40)===0){ctx.beginPath();ctx.arc(x(index),y(item[key]),3,0,Math.PI*2);ctx.fill();}});});ctx.fillStyle='#73817e';ctx.font='11px sans-serif';const step=Math.max(1,Math.ceil(data.length/6));data.forEach((item,index)=>{if(index%step===0)ctx.fillText(item.label,x(index)-14,height-10);});
+  }
+  function showVehicleTooltip(event) {
+    if (!vehicleChartState.points.length) return;
+    const rect=event.currentTarget.getBoundingClientRect(), x=event.clientX-rect.left, y=event.clientY-rect.top;
+    const point=vehicleChartState.points.reduce((closest,current)=>Math.abs(current.x-x)<Math.abs(closest.x-x)?current:closest);
+    if (Math.abs(point.x-x)>14 || Math.min(Math.abs(point.voY-y),Math.abs(point.vkY-y))>18) { hideVehicleTooltip(); return; }
+      let tooltip=document.querySelector('.chart-tooltip'); if(!tooltip){tooltip=document.createElement('div');tooltip.className='chart-tooltip';document.body.appendChild(tooltip);}
+      tooltip.innerHTML=`<b>${point.item.label}</b><br>VO estimados: ${Math.round(point.item.vo)}<br>VK detectados: ${Math.round(point.item.vk)}<br>Diferença: ${Math.round(point.item.vo-point.item.vk)}`;tooltip.style.display='block';tooltip.style.left=`${event.clientX+12}px`;tooltip.style.top=`${event.clientY+12}px`;
+  }
+  function hideVehicleTooltip() { const tooltip=document.querySelector('.chart-tooltip'); if(tooltip) tooltip.style.display='none'; }
+  function exportVehicleExcel() {
+    const rows=vehicleChartState.exportRows; if(!rows.length){showNotice('Não há dados VO/VK filtrados para exportar.');return;}
+    const table=`<table><tr><th>Horário</th><th>Fase PH</th><th>Volume coletado (VK)</th></tr>${rows.map(row=>`<tr><td>${row.label}</td><td>Fase ${row.phase}</td><td>${row.vk}</td></tr>`).join('')}</table>`;
+      const html=`<html><head><meta charset="utf-8"></head><body><h2>Volume detectado</h2>${table}</body></html>`, blob=new Blob([html],{type:'application/vnd.ms-excel'}), url=URL.createObjectURL(blob), link=document.createElement('a');link.href=url;link.download='volume_detectado_VK.xls';link.click();URL.revokeObjectURL(url);
+  }
+  function drawAdsChart(ads) {
+    const canvas=$('adsChart'), ctx=canvas.getContext('2d'), dpr=window.devicePixelRatio||1, width=canvas.clientWidth, height=300;
+    canvas.width=width*dpr; canvas.height=height*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,width,height);
+    const data=adsByLink(ads);
+    if(!data.length){ctx.fillStyle='#73817e';ctx.font='14px sans-serif';ctx.fillText('Não há valores ADS para desenhar.',24,42);return;}
+    const pad={l:50,r:18,t:24,b:48}, max=Math.max(...data.map(d=>d.value),100), slot=(width-pad.l-pad.r)/data.length, barWidth=Math.max(26,Math.min(100,slot*.62)), y=v=>height-pad.b-(height-pad.t-pad.b)*(v/max);
+    ctx.strokeStyle='#e3ebe7';ctx.lineWidth=1;
+    for(let n=0;n<=4;n++){const yy=y(max*n/4);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(width-pad.r,yy);ctx.stroke();ctx.fillStyle='#73817e';ctx.font='11px sans-serif';ctx.fillText(`${Math.round(max*n/4)}%`,4,yy+4);}
+    data.forEach((d,i)=>{const barH=height-pad.b-y(d.value), xx=pad.l+i*slot+(slot-barWidth)/2;ctx.fillStyle='#087f78';ctx.fillRect(xx,y(d.value),barWidth,barH);ctx.fillStyle='#245b57';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillText(`${d.value.toFixed(1)}%`,xx+barWidth/2,y(d.value)-7);ctx.fillStyle='#73817e';ctx.font='11px sans-serif';ctx.fillText(d.label,xx+barWidth/2,height-25);ctx.font='10px sans-serif';ctx.fillText(`${d.count} leituras`,xx+barWidth/2,height-11);});
+    ctx.textAlign='left';
+  }
+  function downloadCsv() { const header='horario,CT,variacao,RL,SA,DS\n'; const body=state.filtered.map(r=>[r.time,r.ct,r.variation,r.rl,r.sa,r.ds??''].join(',')).join('\n'); const blob=new Blob([header+body],{type:'text/csv;charset=utf-8'}), url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download='analise_filtrada.csv'; a.click(); URL.revokeObjectURL(url); }
+  window.addEventListener('resize',()=>{if(state.records.length){drawChart(state.records);applyDsFilters();applyAdsFilters();applyVehicleFilters();refreshMinuteCharts();}});
+  addMinuteChart();
+</script>
+  <script>
+    document.querySelectorAll('input[type="time"]').forEach(input => { input.step = '60'; input.setAttribute('aria-label', 'Horário no formato 24 horas'); });
+  </script>
+</body>
+</html>
